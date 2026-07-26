@@ -60,8 +60,12 @@ When the fork needs to carry automation such as GitHub Actions, maintain a separ
 - Downstream-specific CI/CD, packaging, releases, and repository configuration.
 - Automatically fetching upstream, integrating patches in order, rebuilding the release branch, and pushing safely.
 - Additional downstream single-patch tests and multi-patch integration tests.
-- The downstream README, patch list, and release notes.
+- The downstream README, patch list, release notes, and any downstream-specific maintenance instructions.
 - The fixed integration order of enabled regular patches and `tmp/patch/<name>` branches.
+
+If the user or downstream fork has maintenance requirements beyond this general workflow, keep them in a downstream-owned `MAINTAIN.md` on the `ci` branch. It should state how this particular fork must be maintained and record any special rules that future maintainers and automation must follow. Treat it as repository-specific guidance: read it before changing patch branches, sync orchestration, or release history, and keep it current when those requirements change.
+
+When the special maintenance rules might otherwise be missed, add a concise notice in the `ci` branch's `README.md` linking to `MAINTAIN.md`. Keep the detailed rules in `MAINTAIN.md` rather than duplicating them in the README.
 
 The `ci` branch may centrally carry downstream release automation, but do not mix product behavior patches into it. Runtime changes should remain on branches suitable for independent building, testing, and upstream PR submission.
 
@@ -81,7 +85,7 @@ In release history, each patch should appear as one clear, countable integration
 
 ### 1. Inspect the Current State
 
-Before starting, read the repository's own maintenance and contribution instructions. Inspect the worktree, remotes, current branch, upstream relationships, and existing sync and release process. Preserve or work around any uncommitted user work; do not clean it up or overwrite it without permission.
+Before starting, read the repository's own maintenance and contribution instructions, including the downstream `MAINTAIN.md` when present and any README notice that points to it. Inspect the worktree, remotes, current branch, upstream relationships, and existing sync and release process. Preserve or work around any uncommitted user work; do not clean it up or overwrite it without permission.
 
 ### 2. Reproduce on the Complete Integrated Result
 
@@ -195,7 +199,8 @@ A problem on the main or release branch must be fixed on the corresponding sourc
 
 - [ ] The rebuild started from the latest specific upstream commit.
 - [ ] Every patch has its own branch and can be built, tested, and reviewed independently.
-- [ ] Product patches are maintained separately from the CI/CD, packaging, syncing, and downstream README carried by the `ci` branch.
+- [ ] Product patches are maintained separately from the CI/CD, packaging, syncing, and downstream documentation carried by the `ci` branch.
+- [ ] When the fork has additional maintenance requirements, the `ci` branch carries an up-to-date `MAINTAIN.md`, the README points to it when necessary, and both files are preserved in the integrated result.
 - [ ] Fixes were made on the corresponding regular patch, `tmp/patch/<name>`, or `ci` branch rather than existing only on the release branch.
 - [ ] The `ci` branch declares a fixed order for regular and temporary compatibility patches, with one clear, countable integration commit per patch.
 - [ ] Conflicts and empty patches were fixed on their source branches or retired through the defined process.
