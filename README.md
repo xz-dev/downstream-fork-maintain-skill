@@ -19,19 +19,17 @@ Fixes discovered in the integrated branch must be returned to the owning patch, 
 
 ### Pi
 
-Clone the repository into Pi's skill directory:
+Install the Git package with Pi:
 
 ```sh
-mkdir -p ~/.pi/agent/skills
-git clone https://github.com/xz-dev/downstream-fork-maintain-skill.git \
-  ~/.pi/agent/skills/downstream-fork-maintain
+pi install git:github.com/xz-dev/downstream-fork-maintain-skill
 ```
 
-Restart Pi or begin a new session if the skill is not detected immediately.
+Pi records the package in user settings, manages its checkout under `~/.pi/agent/git/`, and discovers the skill through the conventional `skills/downstream-fork-maintain/` package layout. Start a new Pi session after installation, or run `/reload` in an existing interactive session.
 
 ### Other Agent Skills implementations
 
-The repository follows the `SKILL.md`-based Agent Skills format. Clone or copy it into the skills directory recognized by your compatible agent, preserving `SKILL.md` and `ref/` together.
+The repository follows the `SKILL.md`-based Agent Skills format. Clone or copy `skills/downstream-fork-maintain/` into the skills directory recognized by your compatible agent, preserving `SKILL.md` and `ref/` together.
 
 Discovery paths and invocation syntax depend on the agent implementation.
 
@@ -57,19 +55,21 @@ The skill first inspects repository instructions, remotes, branches, protections
 ```text
 .
 ├── README.md
-├── SKILL.md
 ├── LICENSE
-└── ref/
-    └── upstream-sync.yml
+└── skills/
+    └── downstream-fork-maintain/
+        ├── SKILL.md
+        └── ref/
+            └── upstream-sync.yml
 ```
 
-- **`SKILL.md`** — Maintenance model, workflow, patch lifecycle, safety rules, and completion checklist.
-- **`ref/upstream-sync.yml`** — Example GitHub Actions synchronization workflow.
+- **`skills/downstream-fork-maintain/SKILL.md`** — Maintenance model, workflow, patch lifecycle, safety rules, and completion checklist.
+- **`skills/downstream-fork-maintain/ref/upstream-sync.yml`** — Example GitHub Actions synchronization workflow.
 - **`LICENSE`** — CC BY-NC-SA 4.0 legal terms.
 
 ## Workflow Reference
 
-`ref/upstream-sync.yml` is a project-specific, copy-and-customize reference. It is not a universal ready-to-run workflow.
+`skills/downstream-fork-maintain/ref/upstream-sync.yml` is a project-specific, copy-and-customize reference. It is not a universal ready-to-run workflow.
 
 Before enabling it, review and adapt at least:
 
