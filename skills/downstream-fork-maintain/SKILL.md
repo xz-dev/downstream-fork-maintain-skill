@@ -87,7 +87,24 @@ In release history, each patch should appear as one clear, countable integration
 
 Before starting, read the repository's own maintenance and contribution instructions, including the downstream `MAINTAIN.md` when present and any README notice that points to it. Inspect the worktree, remotes, current branch, upstream relationships, and existing sync and release process. Preserve or work around any uncommitted user work; do not clean it up or overwrite it without permission.
 
-### 2. Reproduce on the Complete Integrated Result
+### 2. Check Upstream Issues and Pull Requests Before Coding
+
+Before implementing any new request or writing code, search the upstream issue tracker and pull requests for related discussion or implementation. Check open and closed issues and open, draft, closed, and merged PRs; search not only the request's exact wording, but also relevant component names, error messages, and reasonable synonyms. Follow linked issues, reviews, commits, and replacement PRs far enough to establish the current status.
+
+Use the result to choose the next action:
+
+- If upstream already implements the requirement, verify the applicable version and behavior before deciding whether any downstream change is still needed.
+- If an active issue or PR covers it, prefer contributing to, testing, updating, or temporarily carrying that work rather than creating an unaware duplicate.
+- If an earlier approach was rejected, reverted, or superseded, understand the stated reason before proposing a new implementation.
+- Record the relevant upstream links and the conclusion in the working plan, patch notes, or PR description so the decision remains reviewable.
+
+When related upstream issues or PRs exist, do not proceed directly to implementation. First establish their actual status, scope, decisions, unresolved concerns, review feedback, implementation state, and relationship to the user's request. Then synthesize the relevant upstream information for the user instead of forwarding a raw list of links. Clearly explain what was learned, how it affects the current assumptions and plan, and which parts of the original request remain necessary.
+
+If that investigation produces a new finding that could change the scope, approach, priority, ownership, compatibility strategy, or need for the work, explicitly ask the user whether the plan should be changed. Pause implementation until the user confirms whether to retain or revise the plan. Do not silently reinterpret the request based on upstream discussion.
+
+Do not begin implementation merely because one exact-term search returned no result. Perform a reasonable search first; if no relevant discussion or implementation is found, state that result and continue.
+
+### 3. Reproduce on the Complete Integrated Result
 
 First reproduce the problem on the current main or release branch to confirm how it occurs in the patch combination users actually run.
 
@@ -98,25 +115,25 @@ During analysis, distinguish among:
 - An integration problem between patches; if it belongs to no individual PR, place it in `tmp/patch/<name>`.
 - A problem in CI, packaging, syncing, or downstream documentation.
 
-### 3. Locate and Fix the Owning Branch
+### 4. Locate and Fix the Owning Branch
 
 Find the patch branch responsible for the behavior and complete the fix and tests on that branch. If the problem concerns compatibility among multiple patches, create or update `tmp/patch/<name>`. If it concerns release automation or other downstream maintenance work, modify the `ci` branch.
 
 Do not commit a conflict fix or product fix only to the main or release branch. It would be lost on the next rebuild from upstream and would prevent the patch from being reviewed independently.
 
-### 4. Keep the Patch Independently Usable
+### 5. Keep the Patch Independently Usable
 
 Following repository conventions, update the patch onto the latest upstream, resolve conflicts on the patch branch, and run the builds and tests required by that patch.
 
 Confirm that it does not rely on hidden changes in the release branch and can still be explained, reviewed, and submitted as a PR on its own. If an upstream PR already exists, update it as well and continue maintaining it in response to upstream feedback.
 
-### 5. Rebuild the Main or Release Branch
+### 6. Rebuild the Main or Release Branch
 
 Fetch the latest upstream again, create a clean candidate branch from a specific upstream head, and then integrate the release overlay, regular patches, and required `tmp/patch/<name>` branches in the fixed order declared by the `ci` branch.
 
 Each regular patch and temporary compatibility patch should produce its own clear integration commit in release history. A repository may use squash merge or the equivalent method established by the project, but the result should be easy to review and count.
 
-### 6. Validate the Usable Result
+### 7. Validate the Usable Result
 
 Run the repository's required checks against the complete candidate version, covering at least:
 
@@ -197,6 +214,8 @@ A problem on the main or release branch must be fixed on the corresponding sourc
 
 ## Completion Checklist
 
+- [ ] Before implementation began, related upstream open and closed issues and PRs were searched, and the relevant links and conclusion were recorded.
+- [ ] When related upstream work existed, its actual status and implications were synthesized for the user; any plan-changing discovery was presented as an explicit choice and implementation waited for the user's decision.
 - [ ] The rebuild started from the latest specific upstream commit.
 - [ ] Every patch has its own branch and can be built, tested, and reviewed independently.
 - [ ] Product patches are maintained separately from the CI/CD, packaging, syncing, and downstream documentation carried by the `ci` branch.
