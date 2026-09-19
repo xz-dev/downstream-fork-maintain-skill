@@ -62,6 +62,7 @@ When the fork needs to carry automation such as GitHub Actions, maintain a separ
 - Additional downstream single-patch tests and multi-patch integration tests.
 - The downstream README, patch list, release notes, and any downstream-specific maintenance instructions.
 - The fixed integration order of enabled regular patches and `tmp/patch/<name>` branches.
+- Deterministic release-projection scripts when the distributed tree is a subset or rearrangement of upstream.
 
 If the user or downstream fork has maintenance requirements beyond this general workflow, keep them in a downstream-owned `MAINTAIN.md` on the `ci` branch. It should state how this particular fork must be maintained and record any special rules that future maintainers and automation must follow. Treat it as repository-specific guidance: read it before changing patch branches, sync orchestration, or release history, and keep it current when those requirements change.
 
@@ -69,13 +70,34 @@ When the special maintenance rules might otherwise be missed, add a concise noti
 
 The `ci` branch may centrally carry downstream release automation, but do not mix product behavior patches into it. Runtime changes should remain on branches suitable for independent building, testing, and upstream PR submission.
 
+### Projected Release Trees
+
+A downstream may distribute only one upstream package or use a different directory layout. Keep two products distinct:
+
+- The **source candidate** preserves upstream's layout. Apply selected upstream PR heads, regular product patches, and compatibility patches here, using exact pinned commits, then run their source-tree tests.
+- The **release projection** is a deterministic `ci`-owned script that reads that candidate and writes an empty output directory. It may use ordinary `cp`, `mv`, and `rm` operations inside the output, but must not mutate the source candidate, fetch network state, create commits, or push.
+- **Release-layout overlays** run only after projection and contain packaging, metadata, CI, or downstream documentation that has no upstream-tree home. Product behavior stays in source-layout patch branches before projection.
+
+The default order is:
+
+```text
+upstream commit → upstream PRs → product patches → source validation
+→ release projection → release-layout overlays → projected validation
+```
+
+Apply an upstream PR before projection because its paths, tests, and cross-package dependencies target the upstream tree. Applying it after files have moved requires a translated downstream-only patch and loses direct upstream compatibility.
+
+To retain countable release history, project the upstream baseline once, then re-run the same projection after each source patch and commit that patch's projected output difference separately. A patch that produces no projected difference is empty for that release and must be investigated rather than hidden with an empty commit. Record the exact upstream and patch commits in a generated provenance file.
+
+Keep the projection script project-specific and small. [`ref/project-release.sh`](ref/project-release.sh) provides the source/output boundary and an output-only customization point; copy it to the target `ci` branch and adapt it rather than making the skill guess a repository layout.
+
 This skill includes the GitHub Actions file used by the current practice: [`ref/upstream-sync.yml`](ref/upstream-sync.yml). When GitHub auto-sync is needed, copy it as a starting point for `.github/workflows/upstream-sync.yml`, then adapt the upstream address, default/release branch, `ci` and patch lists, `tmp/patch/<name>` order, sync schedule, downstream-owned files, secrets, and checks for the target repository. The file retains project-specific configuration from its original project and must not be enabled without review.
 
 When configuring `schedule`, first ask the user during which hours each day the sync should run. GitHub cron uses UTC by default unless the workflow explicitly sets a supported `timezone`. Do not schedule jobs at minute 0 of the hour: [GitHub's official documentation](https://docs.github.com/actions/using-workflows/events-that-trigger-workflows#schedule) states that load is high at the start of every hour, so scheduled jobs may be delayed or even dropped under sufficiently high load. To further avoid common five-minute marks, do not use a multiple of 5, such as 10, 15, 20, 30, 40, or 45. Randomly choose a minute from 1–59 that is not a multiple of 5 and write it as a fixed value in the workflow, for example by running `python -c 'import secrets; print(secrets.choice([m for m in range(1, 60) if m % 5]))'`. Here, “random” applies only when generating the configuration; do not make the workflow wait for a dynamic random delay on every run.
 
 ### Main or Release Branch
 
-The main or release branch starts from the latest upstream and integrates the maintenance branch and required patch branches in a fixed order. It provides the complete code, builds, tests, and release artifacts.
+The main or release branch starts from the latest upstream and integrates the maintenance branch and required patch branches in a fixed order. It provides the complete code, builds, tests, and release artifacts. A projected release branch instead contains the deterministic output described above; its source candidate still starts from upstream and carries the countable patch integrations.
 
 This branch represents only the current downstream integrated result. It is not the long-term maintenance source for any patch. A problem may first be reproduced and analyzed here, but the fix must return to the owning patch or maintenance branch, after which the integrated result must be regenerated.
 
@@ -129,7 +151,9 @@ Confirm that it does not rely on hidden changes in the release branch and can st
 
 ### 6. Rebuild the Main or Release Branch
 
-Fetch the latest upstream again, create a clean candidate branch from a specific upstream head, and then integrate the release overlay, regular patches, and required `tmp/patch/<name>` branches in the fixed order declared by the `ci` branch.
+Fetch the latest upstream again and create a clean source candidate from a specific upstream head. Integrate selected upstream PR commits first, followed by regular patches and required `tmp/patch/<name>` branches in the fixed order declared by `ci`.
+
+For a same-layout release, integrate the release overlay as established by the repository. For a projected release, validate the source candidate, run the `ci` projection into an empty output tree, apply release-layout overlays, and validate the projected package or artifact before constructing the release history. The projection must be reproducible from the recorded refs without modifying any source branch.
 
 Each regular patch and temporary compatibility patch should produce its own clear integration commit in release history. A repository may use squash merge or the equivalent method established by the project, but the result should be easy to review and count.
 
@@ -139,7 +163,8 @@ Run the repository's required checks against the complete candidate version, cov
 
 - Focused tests for each patch itself.
 - Integrated behavior after combining multiple patches.
-- Whether CI, packaging, and downstream documentation come from the correct branches.
+- Whether CI, packaging, projection tooling, and downstream documentation come from the correct branches.
+- For a projected release, whether the output contains only the intended tree, records exact source provenance, and can be installed or packaged through the advertised distribution path.
 - Whether the code or artifacts users actually obtain correspond to the validated commit.
 
 Update the remote main or release branch only after both the candidate code and artifacts pass all required validation.
@@ -153,11 +178,12 @@ The sync process should:
 1. Use the repository's accepted concurrency controls to prevent two sync or release processes from updating the same branch at once.
 2. Fetch the latest upstream, the `ci` branch, all enabled regular patches, and all `tmp/patch/<name>` branches.
 3. Create a clean candidate branch from the explicitly selected upstream commit for that run.
-4. Integrate the downstream release overlay, regular patches, and temporary compatibility patches in the fixed order configured by `ci`.
-5. Give every patch one clear, countable integration commit.
-6. Run the required tests, builds, and packaging against the complete candidate commit.
-7. Verify that no unknown update has appeared on the remote branch since it was fetched.
-8. Update the release branch with a safe push method and ensure subsequent CI or releases run against the exact commit.
+4. Integrate selected upstream PR commits, regular patches, and temporary compatibility patches in the configured source-tree order.
+5. For a same-layout release, integrate the release overlay. For a projected release, validate the source candidate, run the `ci` projection into an empty output tree, and apply release-layout overlays.
+6. Give every patch one clear, countable integration commit; for projected releases, re-project after each source patch so its output difference remains separately countable.
+7. Run the required source checks plus projected-package, build, and artifact checks.
+8. Verify that no unknown update has appeared on the remote branch since it was fetched.
+9. Update the release branch with a safe push method and ensure subsequent CI or releases run against the exact commit.
 
 If a patch conflicts, stop the rebuild immediately. Return to the corresponding patch branch to resolve, test, and review it, then restart from a clean upstream baseline. Do not resolve the conflict directly on the release branch.
 
@@ -210,6 +236,8 @@ Do not first delete a patch branch that is still referenced by sync configuratio
 
 Before operating, inspect repository instructions, the worktree, remotes, and branch protections, and preserve uncommitted work. Use the repository's accepted concurrency controls and `--force-with-lease`. Do not bypass authentication, required checks, or branch protection, and do not overwrite remote changes you cannot explain.
 
+Run projection scripts only with a disposable source worktree and a separate empty output directory. Permit destructive layout commands only inside that output boundary. A script that points `rm`, `mv`, or generated writes at the source checkout is unsafe and must stop before release construction.
+
 A problem on the main or release branch must be fixed on the corresponding source branch. Stop on conflicts, empty patches, test failures, or differences of unknown origin; do not continue releasing from an uncertain state.
 
 ## Completion Checklist
@@ -217,6 +245,7 @@ A problem on the main or release branch must be fixed on the corresponding sourc
 - [ ] Before implementation began, related upstream open and closed issues and PRs were searched, and the relevant links and conclusion were recorded.
 - [ ] When related upstream work existed, its actual status and implications were synthesized for the user; any plan-changing discovery was presented as an explicit choice and implementation waited for the user's decision.
 - [ ] The rebuild started from the latest specific upstream commit.
+- [ ] Selected upstream PRs were pinned and applied before any release projection.
 - [ ] Every patch has its own branch and can be built, tested, and reviewed independently.
 - [ ] Product patches are maintained separately from the CI/CD, packaging, syncing, and downstream documentation carried by the `ci` branch.
 - [ ] When the fork has additional maintenance requirements, the `ci` branch carries an up-to-date `MAINTAIN.md`, the README points to it when necessary, and both files are preserved in the integrated result.
@@ -224,5 +253,6 @@ A problem on the main or release branch must be fixed on the corresponding sourc
 - [ ] The `ci` branch declares a fixed order for regular and temporary compatibility patches, with one clear, countable integration commit per patch.
 - [ ] Conflicts and empty patches were fixed on their source branches or retired through the defined process.
 - [ ] The complete integrated result and its artifacts passed the required validation.
+- [ ] When the release tree is projected, its script read a disposable source candidate, wrote an empty separate output tree, recorded exact provenance, and passed projected install/package checks.
 - [ ] The push neither overwrote unknown remote changes nor bypassed authentication or branch protection.
 - [ ] Patches merged upstream were removed from configuration and documentation and validated before their branches were deleted.

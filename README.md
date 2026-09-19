@@ -8,10 +8,10 @@ The goal is to avoid turning a downstream repository into a permanently divergen
 
 Actual branch and remote names remain project-specific.
 
-- **`ci`** — Downstream release overlay containing synchronization automation, CI/CD, packaging, release configuration, downstream documentation, and the ordered patch list. Product behavior changes do not belong here.
+- **`ci`** — Downstream release overlay containing synchronization automation, CI/CD, packaging, release configuration, downstream documentation, ordered patch lists, and optional deterministic projection scripts. Product behavior changes do not belong here.
 - **Ordinary patch branches** — One focused feature or fix per branch. Each patch remains independently buildable, testable, reviewable, and suitable for upstream submission or continued PR maintenance.
 - **`tmp/patch/<name>`** — Temporary compatibility patches for integration problems caused by combining otherwise independent patches. These branches declare their dependencies, integration position, validation scope, and retirement condition.
-- **Generated main or release branch** — Rebuilt from a specific current upstream commit by applying `ci`, ordinary patches, and compatibility patches in a fixed order. It is the usable integrated result, not the source of truth for patches.
+- **Generated main or release branch** — Rebuilt from a specific current upstream commit by applying source-layout PRs and patches, then optionally projecting them into a subset or rearranged distribution tree. It is the usable integrated result, not the source of truth for patches.
 
 Fixes discovered in the integrated branch must be returned to the owning patch, compatibility, or `ci` branch. The main or release branch is then regenerated.
 
@@ -60,16 +60,18 @@ The skill first inspects repository instructions, remotes, branches, protections
     └── downstream-fork-maintain/
         ├── SKILL.md
         └── ref/
+            ├── project-release.sh
             └── upstream-sync.yml
 ```
 
 - **`skills/downstream-fork-maintain/SKILL.md`** — Maintenance model, workflow, patch lifecycle, safety rules, and completion checklist.
 - **`skills/downstream-fork-maintain/ref/upstream-sync.yml`** — Example GitHub Actions synchronization workflow.
+- **`skills/downstream-fork-maintain/ref/project-release.sh`** — Minimal source/output boundary for a project-specific release projection.
 - **`LICENSE`** — CC BY-NC-SA 4.0 legal terms.
 
 ## Workflow Reference
 
-`skills/downstream-fork-maintain/ref/upstream-sync.yml` is a project-specific, copy-and-customize reference. It is not a universal ready-to-run workflow.
+`skills/downstream-fork-maintain/ref/upstream-sync.yml` is a project-specific, copy-and-customize reference. It is not a universal ready-to-run workflow. For a subset or rearranged release tree, pair it with an adapted `ref/project-release.sh`: apply upstream PRs and product patches in the original upstream layout, validate that source candidate, then project into a separate empty output tree and validate the installable result.
 
 Before enabling it, review and adapt at least:
 
