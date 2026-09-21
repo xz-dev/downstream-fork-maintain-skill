@@ -53,6 +53,18 @@ Such a branch addresses only the downstream compatibility problem for a specific
 
 In the sync orchestration on the `ci` branch, add `tmp/patch/<name>` in order immediately after the patches it depends on. If an earlier Git merge has already produced unresolved textual conflicts, a later compatibility branch cannot cross that conflict. In that case, the `ci` orchestration must explicitly apply the corresponding compatibility handling at the step where the conflict occurs before continuing the rebuild; merely appending the branch to the end of the list is not enough.
 
+When a patch cannot merge into the accumulated release candidate at all (not just a small textual conflict), the resolution mechanism is a position-dependent trade-off, not a blanket rule. Choose per patch, cheapest correct option first:
+
+1. **Real merge or seam-diff against an actual ancestor** — preferred when the patch's neighbor in the integration order is a real git ancestor (e.g. patch B branched off patch A). Merge-base exists, so `git merge` or `git diff <seam> <tip> | git apply --3way` works with no extra infrastructure.
+
+2. **Two-commit compatibility branch** — when the patch's real parent in the sequence is itself a squash-integrated commit on the rebuilt release branch. Squash integration records no ancestry, so merge-base falls back to upstream and every downstream-touched file reports add/add conflicts. Build a compat branch with exactly two commits: a *base* commit whose tree is the accumulated release candidate the patch expects to land on, and a *tip* commit with the patch's resolved content. The sync step then applies `git diff <tip>^ <tip> | git apply --3way`, which is ancestry-irrelevant — only trees matter. Keep the branch at exactly two commits (rebuild via `git commit-tree` rather than adding fixups): the step diffs `tip^..tip`, so any extra commit shrinks or shifts the applied delta.
+
+   Cost warning: the base commit's tree is the accumulated result of *every* patch earlier in the integration order. For a patch late in the sequence, constructing that base means re-deriving the sync prefix itself (measured: ~20 merge/cherry-pick operations plus ~8 hand-resolved union conflicts for a position-19 patch), and it goes stale on every upstream advance. Each hand-resolved union must be compile-gated (`tsgo`/`biome` or the repo's checker) before pushing — diff-shape comparison against the release branch cannot catch a missing or extra brace in a different pre-image.
+
+3. **Narrow resolver script on `ci`** — acceptable for late-sequence patches where a compat base would recreate most of the sync. Keep the script small and patch-specific; a resolver that grows to reimplement merge semantics is a sign the patch should be rebased or retired instead.
+
+Whatever mechanism a sync step uses, any workflow-level assertion about that step must check content intrinsic to the patch itself, not patterns produced by the resolver's output. An assertion tied to resolver output breaks silently when the resolver is retired or replaced.
+
 ### The `ci` Maintenance Branch
 
 When the fork needs to carry automation such as GitHub Actions, maintain a separate `ci` branch. If the repository already has an equivalent branch, retain its name. This branch is the downstream fork's release overlay and is responsible for:
