@@ -19,6 +19,7 @@ A usable integrated result also lets more people freely test upstream PRs, downs
 - Continuously follow upstream rather than preserve only a static branch from one point in time.
 - Keep every patch independently buildable, testable, reviewable, and suitable for submission or ongoing PR maintenance.
 - Provide directly usable code and artifacts through the main or release branch.
+- Treat the fork as a product first: a code change counts as delivered only when the corresponding release is updated and users can obtain the usable result, not when the code is merged.
 - Let users test PRs, patches, and their own changes against a real integrated result.
 - Detect conflicts between patches and upstream early, keep PRs mergeable, and help patches flow upstream.
 - Carry downstream-only overrides and ecosystem capabilities without letting them turn the fork into a hard fork.
@@ -221,6 +222,12 @@ Run the repository's required checks against the complete candidate version, cov
 
 Update the remote main or release branch only after both the candidate code and artifacts pass all required validation.
 
+### 8. Publish the Usable Update
+
+If the fork runs its own release system — version numbers, tags, changelogs, packaged artifacts, or distribution channels — updating code is not the end of the work. After the rebuilt branch passes validation, update the release according to the fork's established convention, or by that system's default: bump the version, regenerate and verify the artifacts, and publish them where users obtain updates.
+
+A change that lives only on patch or integration branches is undelivered work. Users of a downstream fork receive versions and artifacts, not branches. Do not stop after pushing code; stop after users can obtain the update. When the fork's convention leaves the choice open, publish by default rather than accumulating unreleased changes.
+
 ## Automatic Sync
 
 The purpose of automatic sync is to periodically regenerate a usable downstream release result from a new upstream head, not to keep accumulating fixes on an old release branch.
@@ -252,7 +259,7 @@ When an update rewrites release history, use the repository's accepted lease pro
 2. Limit its scope and add explanations and tests so that it meets PR standards.
 3. Confirm that it can be built, tested, and reviewed independently.
 4. Add it at an explicit position in the integration configuration.
-5. Rebuild the release branch and validate the complete code and artifacts.
+5. Rebuild the release branch, validate the complete code and artifacts, and publish through the fork's release system.
 6. Submit an upstream PR when it is suitable to flow upstream.
 
 ### Maintaining a Patch
@@ -311,3 +318,4 @@ A problem on the main or release branch must be fixed on the corresponding sourc
 - [ ] When the release tree is projected, its script read a disposable source candidate, wrote an empty separate output tree, recorded exact provenance, and passed projected install/package checks.
 - [ ] The push neither overwrote unknown remote changes nor bypassed authentication or branch protection.
 - [ ] Patches merged upstream were removed from configuration and documentation and validated before their branches were deleted.
+- [ ] If the fork has its own release system, the release was updated per its convention or by default — version, artifacts, and channels — so users can obtain the change, not only updated code branches.
