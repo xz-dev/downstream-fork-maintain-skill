@@ -21,6 +21,7 @@ A usable integrated result also lets more people freely test upstream PRs, downs
 - Provide directly usable code and artifacts through the main or release branch.
 - Let users test PRs, patches, and their own changes against a real integrated result.
 - Detect conflicts between patches and upstream early, keep PRs mergeable, and help patches flow upstream.
+- Carry downstream-only overrides and ecosystem capabilities without letting them turn the fork into a hard fork.
 
 ## Branch Model
 
@@ -69,6 +70,24 @@ When a patch cannot merge into the accumulated release candidate at all (not jus
 
 Validate each patch when it is introduced and the combined result after integration. Workflow guards should check declared contracts rather than incidental variable names produced by a particular resolver. Keep behavioral tests for cross-patch interactions even when every per-step check passed.
 
+### Downstream Override Branches
+
+A downstream sometimes must override or switch off a specific upstream feature: the feature conflicts with downstream packaging, policy, or integration needs, and the change is not intended to flow upstream. Maintain each such override on its own `chore/<name>` branch.
+
+An override is intentional divergence, which is in tension with the goal of staying mergeable with upstream. Govern it strictly:
+
+- Before creating the branch, search upstream issues, PRs, documentation, and configuration for an official way to disable or configure the feature. Only when no supported mechanism exists should the fork carry an override.
+- Each `chore/<name>` branch must declare which upstream feature it covers or disables, why the downstream needs it, the relevant upstream discussion links, and a retirement condition — for example upstream ships an official toggle, removes or replaces the feature, or downstream decides to restore it.
+- Record every enabled override in an intentional-divergence ledger on the `ci` branch (the downstream patch list may serve as one). Review the ledger at every sync: confirm the override still applies cleanly, still matches the upstream feature's current shape, and its retirement condition has not been met.
+- Prefer the smallest effective change — flipping a default, disabling an entry point, stubbing a call site — over deleting or rewriting large parts of upstream code. Smaller overrides conflict less and retire cheaply. When upstream changes the same area, update the override branch first, like any patch.
+- Keep the override buildable and testable on the current upstream, with a check that fails if the disabled behavior reappears in the integrated result.
+
+An override is not held to the upstream-PR goal, but it is held to the same hygiene: focused scope, clear commits, tests, and independent reviewability.
+
+Integrate `chore/<name>` branches after the product and compatibility patches they may override and before the release overlay and any projection, so the override takes effect in the source candidate and is validated there. Each override appears as one clear, countable integration commit, like any other patch.
+
+When a sync makes an override empty or conflicting, treat it as a state change, not a mechanical event: upstream may have removed the feature, added an official toggle, or changed the feature's implementation. Stop, confirm which case occurred, and update or retire the override per its declaration instead of forcing it through.
+
 ### The `ci` Maintenance Branch
 
 When the fork needs to carry automation such as GitHub Actions, maintain a separate `ci` branch. If the repository already has an equivalent branch, retain its name. This branch is the downstream fork's release overlay and is responsible for:
@@ -77,7 +96,8 @@ When the fork needs to carry automation such as GitHub Actions, maintain a separ
 - Automatically fetching upstream, integrating patches in order, rebuilding the release branch, and pushing safely.
 - Additional downstream single-patch tests and multi-patch integration tests.
 - The downstream README, patch list, release notes, and any downstream-specific maintenance instructions.
-- The fixed integration order of enabled regular patches and `tmp/patch/<name>` branches.
+- The fixed integration order of enabled regular patches, `tmp/patch/<name>` branches, `chore/<name>` overrides, and ecosystem branches.
+- The intentional-divergence ledger recording every enabled `chore/<name>` override: the upstream feature it covers, why, upstream links, and its retirement condition.
 - Deterministic release-projection scripts when the distributed tree is a subset or rearrangement of upstream.
 
 If the user or downstream fork has maintenance requirements beyond this general workflow, keep them in a downstream-owned `MAINTAIN.md` on the `ci` branch. It should state how this particular fork must be maintained and record any special rules that future maintainers and automation must follow. Treat it as repository-specific guidance: read it before changing patch branches, sync orchestration, or release history, and keep it current when those requirements change.
@@ -85,6 +105,21 @@ If the user or downstream fork has maintenance requirements beyond this general 
 When the special maintenance rules might otherwise be missed, add a concise notice in the `ci` branch's `README.md` linking to `MAINTAIN.md`. Keep the detailed rules in `MAINTAIN.md` rather than duplicating them in the README.
 
 The `ci` branch may centrally carry downstream release automation, but do not mix product behavior patches into it. Runtime changes should remain on branches suitable for independent building, testing, and upstream PR submission.
+
+### Downstream Ecosystem Branches
+
+A fork that serves a downstream community grows capabilities upstream does not want and the release overlay should not absorb: extra integration harnesses, bot and community tooling, downstream package automation, or additional developer workflows. Maintain each such capability on its own ecosystem branch.
+
+Git ref namespaces forbid a bare `ci` branch from coexisting with `ci/<name>` refs — a ref name cannot be both a file and a directory, and the files, packed-refs, and reftable backends all reject it. Since the maintenance trunk keeps the name `ci`, ecosystem branches use a separate prefix: `ecosystem/<name>` or `downstream/<name>`. Pick one prefix per fork and stay consistent; do not rename them into `ci/<name>`.
+
+Ecosystem branches follow the maintenance discipline of `ci`:
+
+- One capability per branch, independently testable, with a clear commit history.
+- No product behavior for upstream packages — runtime changes belong on patch branches, and overrides of upstream features belong on `chore/<name>`.
+- Declared in the `ci` orchestration next to the overlay integration, each producing its own clear, countable integration commit.
+- Fixes return to the owning ecosystem branch; the release branch is only regenerated.
+
+For a same-layout release, integrate ecosystem branches together with the `ci` overlay in the declared order. For a projected release, they integrate with the release-layout overlays after projection.
 
 ### Projected Release Trees
 
@@ -97,17 +132,17 @@ A downstream may distribute only one upstream package or use a different directo
 The default order is:
 
 ```text
-upstream commit → upstream PRs → product patches → source validation
-→ release projection → release-layout overlays → projected validation
+upstream commit → upstream PRs → product patches → tmp/patch/<name> → chore/<name> overrides
+→ source validation → release projection → release-layout overlays + ecosystem branches → projected validation
 ```
 
-Apply an upstream PR before projection because its paths, tests, and cross-package dependencies target the upstream tree. Applying it after files have moved requires a translated downstream-only patch and loses direct upstream compatibility.
+Apply an upstream PR before projection because its paths, tests, and cross-package dependencies target the upstream tree. Applying it after files have moved requires a translated downstream-only patch and loses direct upstream compatibility. `chore/<name>` overrides also run in the source tree, before validation and projection, so the disabled or replaced behavior is absent from the validated source candidate and from every projected artifact.
 
 To retain countable release history, project the upstream baseline once, then re-run the same projection after each source patch and commit that patch's projected output difference separately. A patch that produces no projected difference is empty for that release and must be investigated rather than hidden with an empty commit. Record the exact upstream and patch commits in a generated provenance file.
 
 Keep the projection script project-specific and small. [`ref/project-release.sh`](ref/project-release.sh) provides the source/output boundary and an output-only customization point; copy it to the target `ci` branch and adapt it rather than making the skill guess a repository layout.
 
-This skill includes the GitHub Actions file used by the current practice: [`ref/upstream-sync.yml`](ref/upstream-sync.yml). When GitHub auto-sync is needed, copy it as a starting point for `.github/workflows/upstream-sync.yml`, then adapt the upstream address, default/release branch, `ci` and patch lists, `tmp/patch/<name>` order, sync schedule, downstream-owned files, secrets, and checks for the target repository. The file retains project-specific configuration from its original project and must not be enabled without review.
+This skill includes the GitHub Actions file used by the current practice: [`ref/upstream-sync.yml`](ref/upstream-sync.yml). When GitHub auto-sync is needed, copy it as a starting point for `.github/workflows/upstream-sync.yml`, then adapt the upstream address, default/release branch, `ci`, patch, `chore/<name>`, and ecosystem branch lists, `tmp/patch/<name>` order, sync schedule, downstream-owned files, secrets, and checks for the target repository. The file retains project-specific configuration from its original project and must not be enabled without review.
 
 When configuring `schedule`, first ask the user during which hours each day the sync should run. GitHub cron uses UTC by default unless the workflow explicitly sets a supported `timezone`. Do not schedule jobs at minute 0 of the hour: [GitHub's official documentation](https://docs.github.com/actions/using-workflows/events-that-trigger-workflows#schedule) states that load is high at the start of every hour, so scheduled jobs may be delayed or even dropped under sufficiently high load. To further avoid common five-minute marks, do not use a multiple of 5, such as 10, 15, 20, 30, 40, or 45. Randomly choose a minute from 1–59 that is not a multiple of 5 and write it as a fixed value in the workflow, for example by running `python -c 'import secrets; print(secrets.choice([m for m in range(1, 60) if m % 5]))'`. Here, “random” applies only when generating the configuration; do not make the workflow wait for a dynamic random delay on every run.
 
@@ -150,12 +185,13 @@ During analysis, distinguish among:
 
 - A problem in upstream itself.
 - A problem in one independent patch.
+- A problem in a `chore/<name>` override of an upstream feature.
 - An integration problem between patches; if it belongs to no individual PR, place it in `tmp/patch/<name>`.
-- A problem in CI, packaging, syncing, or downstream documentation.
+- A problem in CI, packaging, syncing, downstream documentation, or downstream ecosystem tooling.
 
 ### 4. Locate and Fix the Owning Branch
 
-Find the patch branch responsible for the behavior and complete the fix and tests on that branch. If the problem concerns compatibility among multiple patches, create or update `tmp/patch/<name>`. If it concerns release automation or other downstream maintenance work, modify the `ci` branch.
+Find the patch branch responsible for the behavior and complete the fix and tests on that branch. If the problem concerns compatibility among multiple patches, create or update `tmp/patch/<name>`. If it concerns an overridden or disabled upstream feature, fix the owning `chore/<name>` branch. If it concerns release automation, ecosystem tooling, or other downstream maintenance work, modify the `ci` branch or the owning ecosystem branch.
 
 Do not commit a conflict fix or product fix only to the main or release branch. It would be lost on the next rebuild from upstream and would prevent the patch from being reviewed independently.
 
@@ -167,9 +203,9 @@ Confirm that it does not rely on hidden changes in the release branch and can st
 
 ### 6. Rebuild the Main or Release Branch
 
-Fetch the latest upstream again and create a clean source candidate from a specific upstream head. Integrate selected upstream PR commits first, followed by regular patches and required `tmp/patch/<name>` branches in the fixed order declared by `ci`.
+Fetch the latest upstream again and create a clean source candidate from a specific upstream head. Integrate selected upstream PR commits first, followed by regular patches, required `tmp/patch/<name>` branches, and `chore/<name>` overrides in the fixed order declared by `ci`.
 
-For a same-layout release, integrate the release overlay as established by the repository. For a projected release, validate the source candidate, run the `ci` projection into an empty output tree, apply release-layout overlays, and validate the projected package or artifact before constructing the release history. The projection must be reproducible from the recorded refs without modifying any source branch.
+For a same-layout release, integrate the `ci` overlay and ecosystem branches as established by the repository. For a projected release, validate the source candidate, run the `ci` projection into an empty output tree, apply release-layout overlays together with ecosystem branches, and validate the projected package or artifact before constructing the release history. The projection must be reproducible from the recorded refs without modifying any source branch.
 
 Each regular patch and temporary compatibility patch should produce its own clear integration commit in release history. A repository may use squash merge or the equivalent method established by the project, but the result should be easy to review and count.
 
@@ -192,18 +228,19 @@ The purpose of automatic sync is to periodically regenerate a usable downstream 
 The sync process should:
 
 1. Use the repository's accepted concurrency controls to prevent two sync or release processes from updating the same branch at once.
-2. Fetch the latest upstream, the `ci` branch, all enabled regular patches, and all `tmp/patch/<name>` branches.
+2. Fetch the latest upstream, the `ci` branch, all enabled regular patches, all `tmp/patch/<name>` branches, all enabled `chore/<name>` overrides, and all ecosystem branches.
 3. Create a clean candidate branch from the explicitly selected upstream commit for that run.
-4. Integrate selected upstream PR commits, regular patches, and temporary compatibility patches in the configured source-tree order.
-5. For a same-layout release, integrate the release overlay. For a projected release, validate the source candidate, run the `ci` projection into an empty output tree, and apply release-layout overlays.
-6. Give every patch one clear, countable integration commit; for projected releases, re-project after each source patch so its output difference remains separately countable.
-7. Run the required source checks plus projected-package, build, and artifact checks.
-8. Verify that no unknown update has appeared on the remote branch since it was fetched.
-9. Update the release branch with a safe push method and ensure subsequent CI or releases run against the exact commit.
+4. Integrate selected upstream PR commits, regular patches, temporary compatibility patches, and `chore/<name>` overrides in the configured source-tree order.
+5. Review the intentional-divergence ledger against the fetched upstream state: confirm every `chore/<name>` override still targets the feature it declares, and retire overrides whose retirement condition is met rather than re-applying them.
+6. For a same-layout release, integrate the `ci` overlay and ecosystem branches. For a projected release, validate the source candidate, run the `ci` projection into an empty output tree, and apply release-layout overlays together with ecosystem branches.
+7. Give every patch one clear, countable integration commit; for projected releases, re-project after each source patch so its output difference remains separately countable.
+8. Run the required source checks plus projected-package, build, and artifact checks.
+9. Verify that no unknown update has appeared on the remote branch since it was fetched.
+10. Update the release branch with a safe push method and ensure subsequent CI or releases run against the exact commit.
 
 If a patch conflicts, stop the rebuild immediately. Return to the corresponding patch branch to resolve, test, and review it, then restart from a clean upstream baseline. Do not resolve the conflict directly on the release branch.
 
-If a patch becomes empty, stop and confirm why. It may already have landed upstream, been superseded by another upstream change, or have been maintained incorrectly. Fix or retire it after confirmation; do not hide the state change with an empty commit.
+If a patch becomes empty, stop and confirm why. It may already have landed upstream, been superseded by another upstream change, or have been maintained incorrectly. For a `chore/<name>` override, the covered upstream feature may also have been removed, replaced, or given an official switch, meeting the override's declared retirement condition. Fix or retire it after confirmation; do not hide the state change with an empty commit.
 
 When an update rewrites release history, use the repository's accepted lease protection, such as `--force-with-lease`. A lease failure means the remote has changed: fetch again, investigate, and rebuild. Do not overwrite unknown remote commits or use an unconditional force push.
 
@@ -236,7 +273,7 @@ When a problem caused by combining regular patches belongs to no individual PR b
 
 ### Retiring a Patch
 
-When upstream merges the patch or provides equivalent behavior through another implementation, first confirm that the upstream version truly satisfies downstream needs and run the existing regression tests. Retire a temporary compatibility patch in the same order when its dependency combination no longer exists.
+When upstream merges the patch or provides equivalent behavior through another implementation, first confirm that the upstream version truly satisfies downstream needs and run the existing regression tests. Retire a temporary compatibility patch in the same order when its dependency combination no longer exists. Retire a `chore/<name>` override through the same order when its declared retirement condition is met, removing its divergence-ledger entry together with the integration configuration.
 
 Then retire it in this order:
 
@@ -266,7 +303,9 @@ A problem on the main or release branch must be fixed on the corresponding sourc
 - [ ] Product patches are maintained separately from the CI/CD, packaging, syncing, and downstream documentation carried by the `ci` branch.
 - [ ] When the fork has additional maintenance requirements, the `ci` branch carries an up-to-date `MAINTAIN.md`, the README points to it when necessary, and both files are preserved in the integrated result.
 - [ ] Fixes were made on the corresponding regular patch, `tmp/patch/<name>`, or `ci` branch rather than existing only on the release branch.
-- [ ] The `ci` branch declares a fixed order for regular and temporary compatibility patches, with one clear, countable integration commit per patch.
+- [ ] The `ci` branch declares a fixed order for regular, temporary compatibility, `chore/<name>` override, and ecosystem branches, with one clear, countable integration commit per branch.
+- [ ] Every `chore/<name>` override was checked against upstream for an official switch first, declares the covered feature, reason, and retirement condition, and is recorded in the divergence ledger on `ci`.
+- [ ] Ecosystem branches carry no product behavior and integrate alongside the `ci` overlay.
 - [ ] Conflicts and empty patches were fixed on their source branches or retired through the defined process.
 - [ ] The complete integrated result and its artifacts passed the required validation.
 - [ ] When the release tree is projected, its script read a disposable source candidate, wrote an empty separate output tree, recorded exact provenance, and passed projected install/package checks.

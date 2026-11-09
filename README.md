@@ -8,12 +8,14 @@ The goal is to avoid turning a downstream repository into a permanently divergen
 
 Actual branch and remote names remain project-specific.
 
-- **`ci`** — Downstream release overlay containing synchronization automation, CI/CD, packaging, release configuration, downstream documentation, ordered patch lists, and optional deterministic projection scripts. Product behavior changes do not belong here.
+- **`ci`** — Downstream release overlay containing synchronization automation, CI/CD, packaging, release configuration, downstream documentation, ordered patch lists, the intentional-divergence ledger, and optional deterministic projection scripts. Product behavior changes do not belong here.
 - **Ordinary patch branches** — One focused feature or fix per branch. Each patch remains independently buildable, testable, reviewable, and suitable for upstream submission or continued PR maintenance.
 - **`tmp/patch/<name>`** — Temporary compatibility patches for integration problems caused by combining otherwise independent patches. These branches declare their dependencies, integration position, validation scope, and retirement condition.
-- **Generated main or release branch** — Rebuilt from a specific current upstream commit by applying source-layout PRs and patches, then optionally projecting them into a subset or rearranged distribution tree. It is the usable integrated result, not the source of truth for patches.
+- **`chore/<name>`** — Downstream overrides that disable or replace a specific upstream feature upstream does not offer an official switch for. Each declares the covered feature, reason, upstream links, and retirement condition, and is recorded in the divergence ledger on `ci`. Created only after upstream is confirmed to have no supported toggle; integrated after patches, before the overlay and projection.
+- **Ecosystem branches (`ecosystem/<name>` or `downstream/<name>`, one prefix per fork)** — Capabilities serving the downstream community that upstream does not want and the release overlay should not absorb: integration harnesses, community tooling, downstream package automation. Git forbids a bare `ci` ref from coexisting with `ci/<name>` refs, so these use their own prefix and integrate alongside the `ci` overlay.
+- **Generated main or release branch** — Rebuilt from a specific current upstream commit by applying source-layout PRs, patches, overrides, then optionally projecting them into a subset or rearranged distribution tree. It is the usable integrated result, not the source of truth for patches.
 
-Fixes discovered in the integrated branch must be returned to the owning patch, compatibility, or `ci` branch. The main or release branch is then regenerated.
+Fixes discovered in the integrated branch must be returned to the owning patch, compatibility, override, ecosystem, or `ci` branch. The main or release branch is then regenerated.
 
 ## Installation
 
@@ -77,7 +79,7 @@ Before enabling it, review and adapt at least:
 
 - Upstream repository, remote, and baseline branch.
 - Downstream main or release branch.
-- `ci`, ordinary patch, and `tmp/patch/<name>` branch names and order.
+- `ci`, ordinary patch, `tmp/patch/<name>`, `chore/<name>`, and ecosystem branch names and order.
 - Conflict handling and downstream-owned files.
 - Build, test, packaging, and artifact validation.
 - Authentication secrets, permissions, concurrency, and branch protection.

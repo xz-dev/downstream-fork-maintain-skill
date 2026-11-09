@@ -34,6 +34,10 @@ jobs:
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git remote add upstream https://github.com/earendil-works/pi.git
           git fetch upstream main
+          # Regular patches, tmp/patch/<name> compatibility branches, and
+          # chore/<name> overrides integrate in the source tree, in this order.
+          # Ecosystem branches (ecosystem/<name> or downstream/<name>) integrate
+          # here as well for a same-layout release.
           git fetch origin ci patch/tmp-patchs patch/esc-abort patch/tui-synchronized-cursor patch/changelog-prerelease patch/skill-overrides
           git reset --hard upstream/main
 
@@ -68,6 +72,20 @@ jobs:
 
           git merge --squash origin/patch/skill-overrides
           git commit -m "merge patch/skill-overrides branch"
+
+          # chore/<name> overrides come after the patches they may override.
+          # An override that merges empty or conflicts is a state change to
+          # investigate (upstream removed the feature or added an official
+          # switch); stop and update or retire the override instead of forcing it.
+          # git fetch origin chore/disable-example
+          # git merge --squash origin/chore/disable-example
+          # git commit -m "merge chore/disable-example branch"
+
+          # Ecosystem branches integrate with the ci overlay, after all
+          # source-tree patches and overrides.
+          # git fetch origin ecosystem/community-tools
+          # git merge --squash origin/ecosystem/community-tools
+          # git commit -m "merge ecosystem/community-tools branch"
 
       - name: Require sync workflow token
         env:
